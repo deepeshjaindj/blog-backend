@@ -1,4 +1,4 @@
-import { ApiError } from "./ApiError";
+import { ApiError } from './ApiError';
 
 const asyncHandler = (requestHandler) => async (req, res, next) => {
   try {

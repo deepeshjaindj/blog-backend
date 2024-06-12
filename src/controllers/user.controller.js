@@ -1,4 +1,5 @@
-import { COOKIE_OPTIONS } from '../constants.js';
+import jwt from 'jsonwebtoken';
+import { COOKIE_OPTIONS, REFRESH_TOKEN_SECRET } from '../constants.js';
 import { User } from '../models/user.model.js';
 import { ApiError, ApiResponse, asyncHandler, uploadOnCloudinary } from '../utils/index.js';
 
@@ -132,13 +133,72 @@ const login = asyncHandler(async(req, res) => {
     .json(
       new ApiResponse(
         200,
-        user,
+        {
+          user,
+          refreshToken,
+          accessToken
+        },
         'User logged in successfully!'
       )
     );
 });
 
+const logout = asyncHandler(async (req, res) => {
+  await User.findByIdAndUpdate(
+    req.user?._id, 
+    {
+      $unset: {
+        refreshToken: 1
+      }
+    }
+  );
+
+  return res
+    .status(200)
+    .clearCookie('accessToken', COOKIE_OPTIONS)
+    .clearCookie('refreshToken', COOKIE_OPTIONS)
+    .json(
+      new ApiResponse(200, {}, 'Logged out successfully')
+    );
+});
+
+const refreshAccessToken = asyncHandler(async (req, res) => {
+  // get refresh token
+  const refreshToken = req.cookies?.refreshToken || req.header('Authorization')?.replace('Bearer ', '');
+
+  if (!refreshToken) {
+    throw new ApiError(401, 'Unauthorized access');
+  }
+
+  // decode refresh token
+  const decodedToken = jwt.verify(refreshToken, REFRESH_TOKEN_SECRET);
+
+  // fetch user
+  const user = await User.findById(decodedToken?._id);
+
+  if (!user) {
+    throw new ApiError(404, 'User not found!');
+  }
+  
+  if (refreshToken !== user?.refreshToken) {
+    throw new ApiError(401, 'Invalid or expired refresh token');
+  }
+
+  // generate new tokens
+  const { accessToken, refreshToken: newRefreshToken } = await generateAccessAndRefreshTokens(user?._id);
+
+  return res
+    .status(200)
+    .cookie('accessToken', accessToken, COOKIE_OPTIONS)
+    .cookie('refreshToken', refreshToken, COOKIE_OPTIONS)
+    .json(
+      new ApiResponse(200, { accessToken, refreshToken: newRefreshToken }, 'Access token refreshed successfully!')
+    );
+});
+
 export {
   register,
-  login
+  login,
+  logout,
+  refreshAccessToken,
 };

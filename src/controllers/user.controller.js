@@ -98,7 +98,7 @@ const login = asyncHandler(async(req, res) => {
   const { username, email, password } = req.body;
 
   // validation
-  if (!username || !email) {
+  if (!(username || email)) {
     throw new ApiError(400, 'Either username or email is required.');
   }
 
@@ -114,7 +114,7 @@ const login = asyncHandler(async(req, res) => {
   }
 
   // check password
-  const isValidUser = await user.isPasswordCorrect(password);
+  const isValidUser = await user.isPasswordCorrect(String(password));
 
   if (!isValidUser) {
     throw new ApiError(401, 'Incorrect password');
@@ -123,8 +123,9 @@ const login = asyncHandler(async(req, res) => {
   // generate access and refresh tokens
   const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user?._id);
 
-  delete user.password;
-  delete user.refreshToken;
+  const userObject = user.toObject();
+  delete userObject.password;
+  delete userObject.refreshToken;
 
   return res
     .status(200)
@@ -134,7 +135,7 @@ const login = asyncHandler(async(req, res) => {
       new ApiResponse(
         200,
         {
-          user,
+          user: userObject,
           refreshToken,
           accessToken
         },
